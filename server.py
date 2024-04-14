@@ -5,6 +5,7 @@ import tkinter
 import json
 import socket
 import threading
+import os
 
 class Server:
     def __init__(self, master):
@@ -137,29 +138,23 @@ class Server:
         self.message_entry.delete(0, tk.END)
 
     def send_file(self, client_socket, file_path):
-        client_socket.send("FILE".encode('utf-8'))  # Send file flag
-        with open(file_path, 'rb') as f:
-            data = f.read(4096)
-            while data:
-                client_socket.send(data)
-                data = f.read(4096)
-        client_socket.send("EOF".encode('utf-8'))
-        print("end sent") # Send end-of-file marker
 
+        client_socket.send(b"FILE\n")
+        name = os.path.basename(file_path)
+        client_socket.send(name.encode())
+        client_socket.send(b"\n")
+
+        with open(file_path, "rb") as file:
+            for line in file:
+                client_socket.send(line)
+        client_socket.send(b"EOF")
     
-
 
     def close_server(self):
         if hasattr(self, 'server_socket') and isinstance(self.server_socket, socket.socket):
             self.server_socket.close()
             print("Server socket closed")
         root.destroy()
-
-
-
-
-
-
 
 
 root = ctk.CTk()
