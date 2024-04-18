@@ -116,7 +116,6 @@ class NightStalker:
         self.running_window_logger = False
  
 
-
  #under mentenance still working on it
     def log_website_visits(self):
         last_website = None

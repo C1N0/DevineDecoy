@@ -6,6 +6,7 @@ import json
 import socket
 import threading
 import os
+import pyperclip
 
 class Server:
     def __init__(self, master):
@@ -24,6 +25,9 @@ class Server:
         self.clients = {}
         self.connected_clients = []
         self.client_sockets = {}
+        self.server_running = False
+        self.client_buttons = []
+        self.clients_window = None
 
     def login(self):
         username = self.entry1.get()
@@ -45,6 +49,7 @@ class Server:
         start_button.pack(pady=12, padx=10)
 
     def server_start(self):
+        self.server_running = True
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.bind(('192.168.0.158', 12345))
         self.server_socket.listen(5)       
@@ -52,17 +57,19 @@ class Server:
         self.status_label.pack(pady=12, padx=10)
         self.show_clients_button = ctk.CTkButton(master=self.frame, text="Show Connected Clients", command=self.show_connected_clients)
         self.show_clients_button.pack(pady=12, padx=10)
-        self.handle_connection()
+        threading.Thread(target=self.handle_client, daemon=True).start()
 
-    def handle_connection(self):
-        def handle_client():
-            while True:
-                client_socket, address = self.server_socket.accept()
+    def handle_client(self):
+            while self.server_running:
+                try:
+                    client_socket, address = self.server_socket.accept()
+                except OSError:
+                    break
                 print("added",address)
                 self.connected_clients.append(address)
                 self.client_sockets[address[0]] = client_socket
 
-                def receive_message():
+                def receive_message(): 
                         while True:
                             try:
                                 received_message = client_socket.recv(4096)
@@ -77,26 +84,31 @@ class Server:
                         print(self.connected_clients)
 
                 threading.Thread(target=receive_message, daemon=True).start()
-        threading.Thread(target=handle_client).start()
 
     def show_connected_clients(self):
-        clients_window = Toplevel()
-        clients_window.geometry('400x400')
-        clients_window.title('Connected Clients')
+        if self.clients_window is None:
+            self.clients_window = Toplevel()
+            self.clients_window.geometry('400x400')
+            self.clients_window.title('Connected Clients')
+            self.refresh_button = tk.Button(self.clients_window, text="Refresh", command=self.show_connected_clients)
+            self.refresh_button.pack()
+
+        for button in self.client_buttons:
+            button.destroy()
+        self.client_buttons = []
 
         for client in self.connected_clients:
             client_ip, _= client
-            client_button = Button(clients_window, text=str(client_ip), command=lambda ip=client_ip: self.handle_client_click(ip))
+            client_button = Button(self.clients_window, text=str(client_ip), command=lambda ip=client_ip: self.handle_client_click(ip))
             client_button.pack(side='top',anchor='w')
+            self.client_buttons.append(client_button)
 
     def handle_client_click(self, client_ip):
         self.client_window = tk.Toplevel(root)
         self.client_window.geometry('400x400')
         self.client_window.title(f"Client {client_ip}")
-        
         self.chat_button = tk.Button(self.client_window, text="Chat", command=lambda: self.open_chat_window(client_ip))
         self.chat_button.pack()
-
         self.send_file_button = tk.Button(self.client_window, text="Send File", command=lambda: self.open_send_file_window(client_ip))
         self.send_file_button.pack()
 
@@ -110,19 +122,23 @@ class Server:
         self.message_entry.pack()
         self.send_button = tk.Button(self.chat_window, text="Send", command=lambda: self.send_message(client_ip))
         self.send_button.pack()
+        self.paste_button = tk.Button(self.chat_window, text="Paste", command=self.paste)
+        self.paste_button.pack()
+
+    def paste(self):
+            clipboard_text = pyperclip.paste()
+            self.message_entry.delete(0, tk.END)
+            self.message_entry.insert(0, clipboard_text)
 
     def open_send_file_window(self, client_ip):
         self.send_file_window = tk.Toplevel(root)
         self.send_file_window.geometry('400x400')
         self.send_file_window.title(f"Send File to {client_ip}")
-
         self.file_path = tk.StringVar()
         self.file_path_label = tk.Label(self.send_file_window, textvariable=self.file_path)
         self.file_path_label.pack()
-
         self.select_file_button = tk.Button(self.send_file_window, text="Select File", command=self.select_file)
         self.select_file_button.pack()
-
         self.send_file_button = tk.Button(self.send_file_window, text="Send File", command=lambda: self.send_file(self.client_sockets[client_ip], self.file_path.get()))
         self.send_file_button.pack()
 
@@ -138,21 +154,19 @@ class Server:
         self.message_entry.delete(0, tk.END)
 
     def send_file(self, client_socket, file_path):
-
         client_socket.send(b"FILE\n")
         name = os.path.basename(file_path)
         client_socket.send(name.encode())
         client_socket.send(b"\n")
-
         with open(file_path, "rb") as file:
             for line in file:
                 client_socket.send(line)
         client_socket.send(b"EOF")
     
-
     def close_server(self):
         if hasattr(self, 'server_socket') and isinstance(self.server_socket, socket.socket):
             self.server_socket.close()
+            self.server_running = False
             print("Server socket closed")
         root.destroy()
 

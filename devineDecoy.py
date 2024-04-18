@@ -5,7 +5,6 @@ import os
 import subprocess
 
 def connect(server_ip, server_port):
-    
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     connected_once = False
     while True:
@@ -14,26 +13,24 @@ def connect(server_ip, server_port):
             client_socket.connect((server_ip, server_port))
             connected_once = True
             print("Connected to the server.")
-            # threading.Thread(target=receive_data, args=(client_socket,)).start()
             receive_data(client_socket)
         except ConnectionRefusedError:
             if connected_once:
-                print("Connected once. Connection lost. Retrying in 5 seconds...")
+                print("Connected once. Connection lost. Retrying in 7 seconds...")
             else:
-                print("Connection refused. Retrying in 5 seconds...")
+                print("Connection refused. Retrying in 7 seconds...")
                 client_socket.close()
                 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                time.sleep(5)
+                time.sleep(7)
                 continue
         except (BrokenPipeError, ConnectionResetError, OSError) as e:
-                print(f"{type(e).__name__} Connection lost. Retrying in 5 seconds...")
+                print(f"{type(e).__name__} Connection lost. Retrying in 7 seconds...")
                 client_socket.close()
                 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                time.sleep(5)
+                time.sleep(7)
                 continue
 
 def receive_file(client_socket):
-
     name = ""
     while True:
         print("Receiving data...")
@@ -44,14 +41,12 @@ def receive_file(client_socket):
             file_data = data.split("\n", 1)[1].encode()
             break
         name += data
-
     while True:
         data = client_socket.recv(4096)
         if data.endswith(b"EOF"):
             file_data += data[:-3]
             break
         file_data += data
-
     temp_dir = tempfile.gettempdir()
     print(f"Saving file to {temp_dir}")
     file_path = os.path.join(temp_dir, name)
